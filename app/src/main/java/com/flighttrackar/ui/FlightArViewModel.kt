@@ -361,7 +361,7 @@ class FlightArViewModel(application: Application) : AndroidViewModel(application
                     val pollDelayMs = when (state.settings.provider) {
                         AdsbProviderChoice.OPENSKY -> 8000L
                         AdsbProviderChoice.DEMO_SIM -> 2000L
-                        else -> if (result.activeSourceName == "OpenSky") 8000L else 2200L
+                        else -> if (result.activeSourceName == "OpenSky") 8000L else 3000L
                     }
                     delay(pollDelayMs)
                 } else {

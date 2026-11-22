@@ -69,6 +69,40 @@ class AdsbParserTest {
     }
 
     @Test
+    fun parseReadsbV2Json_parsesAdsbFiAircraftArrayAndOperator() {
+        val adsbFiJson = """
+            {
+              "now": 1795389020.0,
+              "aircraft": [
+                {
+                  "hex": "a20621",
+                  "flight": "ASA1568 ",
+                  "r": "N22995",
+                  "t": "B739",
+                  "desc": "BOEING 737-900",
+                  "ownOp": "ALASKA AIRLINES INC",
+                  "lat": 37.65,
+                  "lon": -122.40,
+                  "alt_baro": 4700,
+                  "alt_geom": 4750,
+                  "gs": 234.0,
+                  "track": 280.5,
+                  "baro_rate": -900,
+                  "seen_pos": 0.25
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val parsed = repo.parseReadsbV2Json(adsbFiJson, "adsb.fi", nowMonotonicSec = 200.0)
+        assertEquals(1, parsed.size)
+        val ac = parsed[0]
+        assertEquals("ASA1568", ac.callsign)
+        assertEquals("BOEING 737-900 · ALASKA AIRLINES INC", ac.description)
+        assertEquals(0.25, ac.positionAgeSec, 0.01)
+    }
+
+    @Test
     fun parseOpenSkyJson_parsesStateVectorsAndComputesPositionAge() {
         val sampleJson = """
             {

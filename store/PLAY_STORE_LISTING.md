@@ -37,7 +37,7 @@ This document contains everything needed to configure, build, verify, and publis
 > - Phone magnetometers can drift by several degrees. Use fine azimuth/pitch nudge controls or tap **Lock-On Sync** to snap compass alignment directly to a visually detected airplane.
 >
 > **OPEN ADS-B DATA & PRIVACY FIRST**
-> - Uses open, community-driven ADS-B networks (`airplanes.live`, `adsb.lol`, and `OpenSky Network`) with automatic fallback—no API key or account required.
+> - Uses open, community-driven ADS-B networks (`adsb.fi`, `adsb.lol`, and `OpenSky Network`) with automatic fallback—no API key or account required.
 > - Includes an offline Demo Simulation mode for testing indoors.
 > - No ads, no tracking, and no analytics. Camera frames are processed 100% on-device and are never recorded or uploaded.
 
@@ -69,7 +69,7 @@ Google Play requires a publicly accessible HTTPS Privacy Policy URL for apps req
 ## 4. Play Console Data Safety Questionnaire Answers
 
 - **Does your app collect or share any of the required user data types?**
-  - **Yes** — *Location (Approximate or Precise location)* is transmitted off-device solely in ephemeral HTTPS queries to third-party public ADS-B APIs (`airplanes.live`, `adsb.lol`, `opensky-network.org`) to look up nearby flights.
+  - **Yes** — *Location (Approximate or Precise location)* is transmitted off-device solely in ephemeral HTTPS queries to third-party public ADS-B APIs (`adsb.fi`, `adsb.lol`, `opensky-network.org`) to look up nearby flights.
 - **Location Data Declaration:**
   - **Collected:** Yes *(note: Play Console defines sending location off-device to any external endpoint as "collected" unless processed strictly on-device; mark **"Processed ephemerally"** = Yes!)*
   - **Shared:** No (not shared with third parties for advertising/analytics/brokers; used solely for core app functionality)

@@ -11,6 +11,7 @@
 
 # Release signing secrets (never commit!)
 keystore.properties
+signing.sh
 *.jks
 *.keystore
 *.p12

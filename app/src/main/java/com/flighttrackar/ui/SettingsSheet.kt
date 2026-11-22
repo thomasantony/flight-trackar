@@ -165,7 +165,7 @@ fun SettingsSheet(
             Text(
                 text = "FlightTrackAR v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})\n" +
                     "Camera frames are processed strictly on-device and never recorded or transmitted. " +
-                    "Live flight positions are fetched from open community ADS-B networks (airplanes.live, adsb.lol, OpenSky Network).",
+                    "Live flight positions are fetched from open community ADS-B networks (adsb.fi, adsb.lol, OpenSky Network).",
                 fontSize = 11.sp,
                 color = HudColors.TextSecondary,
                 lineHeight = 16.sp

@@ -143,7 +143,7 @@ fun ArFlightOverlay(
 
             // 2. Visual Detection Bounding Box (from Day/Night camera CV pipeline)
             val det = ac.visualDetection
-            if (det != null && det.confidence >= 0.30f) {
+            if (det != null && det.confidence >= 0.55f) {
                 val boxCx = det.centerXNorm * vw
                 val boxCy = det.centerYNorm * vh
                 val boxW = (det.boxWidthNorm * vw).coerceIn(52f, 260f)

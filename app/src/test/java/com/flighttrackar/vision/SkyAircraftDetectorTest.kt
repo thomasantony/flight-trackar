@@ -149,4 +149,53 @@ class SkyAircraftDetectorTest {
         assertEquals(DetectedSkyMode.OBSTRUCTED, result.stats.activeMode)
         assertTrue("Expected no false detections in obstructed scene", result.detections.isEmpty())
     }
+
+    @Test
+    fun daySkyWithTreeBranchesAtBottomOfRoi_rejectsTreeTwigs() {
+        val w = 320
+        val h = 480
+        // Bright blue sky above y=260, dark tree canopy + protruding twig below y=245
+        val yData = IntArray(w * h) { idx ->
+            val y = idx / w
+            if (y < 260) 185 else 35
+        }
+        // Protruding tree twig sticking up into the sky just above the canopy (y=246..259)
+        for (y in 246..259) {
+            for (x in 156..164) {
+                yData[y * w + x] = 35
+            }
+        }
+        // Isolated leaf cluster right above the dark canopy (y=238..242)
+        for (y in 238..242) {
+            for (x in 158..162) {
+                yData[y * w + x] = 40
+            }
+        }
+
+        val detector = SkyAircraftDetector()
+        val hint = SkyAircraftDetector.AircraftRoiHint(
+            icao24 = "d77777",
+            predictedXNorm = 160f / w,
+            predictedYNorm = 230f / h,
+            roiHalfWidthNorm = 48f / w,
+            roiHalfHeightNorm = 48f / h,
+            velocityXNormPerSec = 0f,
+            velocityYNormPerSec = 0f,
+            expectedSizeNorm = 10f / w,
+            elevationDeg = 12.0
+        )
+
+        val result = detector.analyzeFrame(
+            frame = SyntheticFrame(w, h, yData, uVal = 148, vVal = 112),
+            hints = listOf(hint),
+            visionMode = VisionMode.AUTO,
+            timestampMs = 3000L
+        )
+
+        assertEquals(DetectedSkyMode.DAY, result.stats.activeMode)
+        assertTrue(
+            "Tree twigs/leaves near dark canopy should not produce a false aircraft lock",
+            result.detections["d77777"] == null
+        )
+    }
 }

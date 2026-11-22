@@ -3,15 +3,15 @@ package com.flighttrackar.model
 enum class AdsbProviderChoice(val label: String, val subtitle: String) {
     AUTO(
         "Auto (Best Open)",
-        "airplanes.live → adsb.lol → OpenSky fallback"
+        "adsb.fi → adsb.lol → OpenSky fallback"
     ),
-    AIRPLANES_LIVE(
-        "airplanes.live",
-        "~2s updates, turn-rate & position age, no API key"
+    ADSB_FI(
+        "adsb.fi OpenData",
+        "Fast sub-second positions, aircraft type & operator, no API key"
     ),
     ADSB_LOL(
         "adsb.lol",
-        "~2s updates, turn-rate & position age, no API key"
+        "Fast readsb v2 feed (500 req/day/IP limit), no API key"
     ),
     OPENSKY(
         "OpenSky Network",

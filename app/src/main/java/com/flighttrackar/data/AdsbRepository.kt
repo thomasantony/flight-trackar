@@ -31,9 +31,9 @@ data class AdsbFetchResult(
 
 /**
  * Multi-provider open ADS-B repository supporting:
- *  - airplanes.live (v2/point, fast ~2s updates, includes track_rate & seen_pos)
- *  - adsb.lol (v2/point, identical readsb schema, automatic fallback)
- *  - OpenSky Network (/api/states/all, bounding box, final fallback)
+ *  - adsb.fi OpenData (primary: sub-second seen_pos, aircraft type/desc/operator, no API key)
+ *  - adsb.lol (secondary readsb v2 fallback, no API key)
+ *  - OpenSky Network (/api/states/all bounding box, final fallback)
  *  - Built-in Demo Simulation for offline/indoor testing
  */
 class AdsbRepository(
@@ -65,7 +65,7 @@ class AdsbRepository(
 
         val providersToTry: List<AdsbProviderChoice> = when (providerChoice) {
             AdsbProviderChoice.AUTO -> listOf(
-                AdsbProviderChoice.AIRPLANES_LIVE,
+                AdsbProviderChoice.ADSB_FI,
                 AdsbProviderChoice.ADSB_LOL,
                 AdsbProviderChoice.OPENSKY
             )
@@ -81,7 +81,7 @@ class AdsbRepository(
                 val elapsed = System.currentTimeMillis() - startMs
 
                 val parsed = when (provider) {
-                    AdsbProviderChoice.AIRPLANES_LIVE, AdsbProviderChoice.ADSB_LOL ->
+                    AdsbProviderChoice.ADSB_FI, AdsbProviderChoice.ADSB_LOL ->
                         parseReadsbV2Json(body, sourceName, nowMonotonicSec)
                     AdsbProviderChoice.OPENSKY ->
                         parseOpenSkyJson(body, nowMonotonicSec, nowEpochSec)
@@ -113,8 +113,8 @@ class AdsbRepository(
         val latStr = String.format(Locale.US, "%.4f", observer.latitudeDeg)
         val lonStr = String.format(Locale.US, "%.4f", observer.longitudeDeg)
         return when (provider) {
-            AdsbProviderChoice.AIRPLANES_LIVE ->
-                "https://api.airplanes.live/v2/point/$latStr/$lonStr/$radiusNm" to "airplanes.live"
+            AdsbProviderChoice.ADSB_FI ->
+                "https://opendata.adsb.fi/api/v2/lat/$latStr/lon/$lonStr/dist/$radiusNm" to "adsb.fi"
             AdsbProviderChoice.ADSB_LOL ->
                 "https://api.adsb.lol/v2/point/$latStr/$lonStr/$radiusNm" to "adsb.lol"
             AdsbProviderChoice.OPENSKY -> {
@@ -133,7 +133,7 @@ class AdsbRepository(
     private fun executeGet(url: String): String {
         val req = Request.Builder()
             .url(url)
-            .header("User-Agent", "FlightTrackAR/1.0 (Android AR Flight Tracker)")
+            .header("User-Agent", "FlightTrackAR/1.0 (Android)")
             .header("Accept", "application/json")
             .build()
         client.newCall(req).execute().use { response ->
@@ -145,7 +145,7 @@ class AdsbRepository(
     }
 
     /**
-     * Parses readsb / tar1090 v2 JSON used by airplanes.live and adsb.lol.
+     * Parses readsb / tar1090 v2 JSON used by adsb.fi ("aircraft") and adsb.lol ("ac").
      */
     fun parseReadsbV2Json(
         rawJson: String,
@@ -153,7 +153,7 @@ class AdsbRepository(
         nowMonotonicSec: Double
     ): List<AdsbObservation> {
         val root = json.parseToJsonElement(rawJson).jsonObject
-        val acArray = root["ac"]?.jsonArray ?: return emptyList()
+        val acArray = (root["ac"] ?: root["aircraft"])?.jsonArray ?: return emptyList()
         val result = ArrayList<AdsbObservation>(acArray.size)
 
         for (elem in acArray) {
@@ -173,13 +173,18 @@ class AdsbRepository(
             val vertRateFpm = obj.dbl("geom_rate") ?: obj.dbl("baro_rate")
             val seenPos = (obj.dbl("seen_pos") ?: obj.dbl("seen") ?: 0.0).coerceIn(0.0, 120.0)
 
+            val descParts = listOfNotNull(
+                obj.str("desc")?.trim()?.takeIf { it.isNotEmpty() },
+                obj.str("ownOp")?.trim()?.takeIf { it.isNotEmpty() }
+            )
+
             result.add(
                 AdsbObservation(
                     icao24 = hex,
                     callsign = obj.str("flight")?.trim()?.takeIf { it.isNotEmpty() },
                     registration = obj.str("r")?.trim()?.takeIf { it.isNotEmpty() },
                     aircraftType = obj.str("t")?.trim()?.takeIf { it.isNotEmpty() },
-                    description = obj.str("desc")?.trim()?.takeIf { it.isNotEmpty() },
+                    description = descParts.joinToString(" · ").takeIf { it.isNotEmpty() },
                     latitudeDeg = lat,
                     longitudeDeg = lon,
                     geomAltitudeMeters = altGeomFt?.times(GeoMath.FEET_TO_METERS),

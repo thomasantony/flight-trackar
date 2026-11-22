@@ -9,7 +9,7 @@
 ## Key Features
 
 - **Multi-Provider Open ADS-B Feed (No API Key Required)**
-  - **Auto mode** queries [`airplanes.live`](https://airplanes.live/) (~2 s updates with `track_rate` and `seen_pos`) and automatically falls back to [`adsb.lol`](https://www.adsb.lol/) and the [OpenSky Network](https://opensky-network.org/).
+  - **Auto mode** queries [`adsb.fi` OpenData](https://opendata.adsb.fi/) (sub-second `seen_pos`, aircraft type & operator) and automatically falls back to [`adsb.lol`](https://www.adsb.lol/) and the [OpenSky Network](https://opensky-network.org/).
   - Includes a built-in **Demo Simulation** mode with synthetic cruising, climbing, descending, and banking flights (with simulated 2.5 s ADS-B delay) for indoor or offline testing.
 - **3D CTRV Extended Kalman Filter (Delay Compensation & Motion Prediction)**
   - Tracks each aircraft in a local East-North-Up (ENU) meter frame using a 7-state CTRV state vector $[p_E, p_N, p_U, v_h, \psi, \omega, v_z]^T$.
@@ -112,4 +112,4 @@ See [store/PLAY_STORE_LISTING.md](store/PLAY_STORE_LISTING.md) for the complete 
 ## Privacy & Open Data Attribution
 
 - **Privacy Policy:** [PRIVACY_POLICY.md](PRIVACY_POLICY.md) (HTML version ready for GitHub Pages in [docs/privacy-policy.html](docs/privacy-policy.html)). Camera frames are processed exclusively on-device in memory and are never recorded, stored, or transmitted.
-- **Open ADS-B Networks:** Live flight data is courtesy of community-operated open ADS-B feeds: [airplanes.live](https://airplanes.live/), [adsb.lol](https://www.adsb.lol/), and the [OpenSky Network](https://opensky-network.org/).
+- **Open ADS-B Networks:** Live flight data is courtesy of community-operated open ADS-B feeds: [adsb.fi](https://adsb.fi/), [adsb.lol](https://www.adsb.lol/), and the [OpenSky Network](https://opensky-network.org/).

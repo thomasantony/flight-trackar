@@ -20,7 +20,7 @@ FlightTrackAR is an augmented-reality flight-tracking application that overlays 
 ### Device Location (`ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION`)
 - **Purpose:** Used to calculate the 3D bearing, elevation, and slant distance of overhead aircraft relative to you, compute local magnetic declination, and query nearby flights within your chosen search radius.
 - **Transmission to Public ADS-B Feeds:** When live flight tracking is active (i.e., not in Demo Simulation mode), your device sends HTTPS requests directly to your selected open ADS-B data provider containing your rounded latitude/longitude (4 decimal places, ~11 m precision) and search radius (or geographic bounding box for OpenSky Network):
-  - `api.airplanes.live` (airplanes.live)
+  - `opendata.adsb.fi` (adsb.fi)
   - `api.adsb.lol` (adsb.lol)
   - `opensky-network.org` (OpenSky Network)
 - **No Persistent Storage by Developer:** The developer does not collect, receive, log, or store your location history. Please refer to the respective open ADS-B network privacy policies regarding standard web server access logs.

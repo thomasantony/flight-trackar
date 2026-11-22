@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.flighttrackar.math.CameraProjection
@@ -172,9 +173,7 @@ private fun TopTelemetryBar(
     onToggleCalibrate: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
@@ -182,8 +181,12 @@ private fun TopTelemetryBar(
             .border(1.dp, HudColors.PanelBorder, RoundedCornerShape(14.dp))
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
-        // Heading, Pitch & Track Count
-        Column {
+        // Row 1: Heading, Pitch & Live Feed Status (never crowds buttons!)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth()
+        ) {
             val hdg = uiState.trueHeadingDeg.roundToInt() % 360
             val cardinal = cardinalDirection(hdg)
             val pitch = uiState.calibratedPitchDeg.roundToInt()
@@ -192,22 +195,38 @@ private fun TopTelemetryBar(
                 color = HudColors.TextPrimary,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                softWrap = false
             )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
             val visibleCount = uiState.projectedAircraft.count { it.isInViewport }
-            val lockedCount = uiState.projectedAircraft.count { it.isInViewport && it.visualDetection != null }
+            val lockedCount = uiState.projectedAircraft.count {
+                it.isInViewport && (it.visualDetection?.confidence ?: 0f) >= 0.55f
+            }
             val sourceTag = if (uiState.settings.provider == AdsbProviderChoice.DEMO_SIM) "DEMO" else uiState.activeSourceName
             Text(
-                text = "$sourceTag · $visibleCount in view / ${uiState.totalTrackedCount} near" +
-                    if (lockedCount > 0) " · $lockedCount locked" else "",
+                text = "$sourceTag · $visibleCount/${uiState.totalTrackedCount}" +
+                    if (lockedCount > 0) " · $lockedCount lock" else "",
                 color = if (lockedCount > 0) HudColors.EmeraldLock else HudColors.TextSecondary,
                 fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
             )
         }
 
-        // Quick-Toggle HUD Buttons
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Spacer(modifier = Modifier.height(7.dp))
+
+        // Row 2: Dedicated single-line quick-action pills (guaranteed never to wrap or clip)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
             val (visionIcon, visionColor) = when (uiState.settings.visionMode) {
                 VisionMode.OFF -> Icons.Default.VisibilityOff to HudColors.TextSecondary
                 VisionMode.NIGHT -> Icons.Default.NightsStay to HudColors.AmberNight
@@ -220,10 +239,11 @@ private fun TopTelemetryBar(
             }
             HudIconPill(
                 icon = visionIcon,
-                label = uiState.settings.visionMode.label.take(3).uppercase(),
+                label = uiState.settings.visionMode.label.uppercase(),
                 active = uiState.settings.visionMode != VisionMode.OFF,
                 tint = visionColor,
-                onClick = onCycleVision
+                onClick = onCycleVision,
+                modifier = Modifier.weight(1f)
             )
             HudIconPill(
                 icon = Icons.Default.Explore,
@@ -232,21 +252,24 @@ private fun TopTelemetryBar(
                     abs(uiState.settings.calibration.azimuthOffsetDeg) > 0.1f ||
                     abs(uiState.settings.calibration.pitchOffsetDeg) > 0.1f,
                 tint = HudColors.CyanPrimary,
-                onClick = onToggleCalibrate
+                onClick = onToggleCalibrate,
+                modifier = Modifier.weight(1f)
             )
             HudIconPill(
                 icon = Icons.Default.BugReport,
                 label = "DBG",
                 active = uiState.settings.showDebugHud,
                 tint = HudColors.AmberNight,
-                onClick = onToggleDebug
+                onClick = onToggleDebug,
+                modifier = Modifier.weight(1f)
             )
             HudIconPill(
                 icon = Icons.Default.Settings,
-                label = null,
-                active = false,
+                label = "SRC",
+                active = uiState.showSettingsSheet,
                 tint = HudColors.TextPrimary,
-                onClick = onOpenSettings
+                onClick = onOpenSettings,
+                modifier = Modifier.weight(1f)
             )
         }
     }
@@ -258,35 +281,39 @@ private fun HudIconPill(
     label: String?,
     active: Boolean,
     tint: Color,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
+        horizontalArrangement = Arrangement.Center,
+        modifier = modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(if (active) tint.copy(alpha = 0.22f) else Color(0x33FFFFFF))
+            .background(if (active) tint.copy(alpha = 0.22f) else Color(0x28FFFFFF))
             .border(
                 width = 1.dp,
                 color = if (active) tint else Color(0x22FFFFFF),
                 shape = RoundedCornerShape(10.dp)
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 7.dp, vertical = 6.dp)
+            .padding(horizontal = 6.dp, vertical = 6.dp)
     ) {
         Icon(
             imageVector = icon,
             contentDescription = label,
             tint = if (active) tint else HudColors.TextPrimary,
-            modifier = Modifier.size(16.dp)
+            modifier = Modifier.size(15.dp)
         )
         if (label != null) {
-            Spacer(modifier = Modifier.width(3.dp))
+            Spacer(modifier = Modifier.width(4.dp))
             Text(
                 text = label,
-                fontSize = 10.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (active) tint else HudColors.TextPrimary,
-                fontFamily = FontFamily.Monospace
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                softWrap = false
             )
         }
     }

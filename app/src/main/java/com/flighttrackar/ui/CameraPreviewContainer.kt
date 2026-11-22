@@ -1,9 +1,17 @@
 package com.flighttrackar.ui
 
+import android.content.Context
+import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
+import android.hardware.camera2.CaptureRequest
+import android.hardware.camera2.CaptureResult
+import android.hardware.camera2.TotalCaptureResult
+import android.os.Build
 import android.util.Size
 import androidx.annotation.OptIn
 import androidx.camera.camera2.interop.Camera2CameraInfo
+import androidx.camera.camera2.interop.Camera2Interop
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
@@ -31,15 +39,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.flighttrackar.model.CameraIntrinsics
 import com.flighttrackar.vision.CameraAnalyzer
 import com.flighttrackar.vision.SkyAircraftDetector
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.abs
+import kotlin.math.hypot
 
 /**
  * Hosts CameraX PreviewView + YUV ImageAnalysis for sky detection, reads exact Camera2
- * physical sensor & focal-length intrinsics (including multi-lens zoom range on Pixel 9 Pro),
- * and supports pinch-to-zoom and tap-to-select gestures.
+ * 1.0x physical lens focal length & sensor size (including multi-camera logical devices
+ * like Pixel 9 Pro via live CaptureResult), and supports pinch-to-zoom & tap-to-select.
  */
 @OptIn(ExperimentalCamera2Interop::class)
 @Composable
@@ -54,6 +64,7 @@ fun CameraPreviewContainer(
     var boundCamera by remember { mutableStateOf<Camera?>(null) }
     val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
     val detector = remember { SkyAircraftDetector() }
+    val calibrated1xLens = remember { AtomicBoolean(false) }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -102,10 +113,63 @@ fun CameraPreviewContainer(
                     implementationMode = PreviewView.ImplementationMode.PERFORMANCE
                 }
 
+                val cameraManager = ctx.getSystemService(Context.CAMERA_SERVICE) as CameraManager
                 val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
                 cameraProviderFuture.addListener({
                     val cameraProvider = cameraProviderFuture.get()
-                    val preview = Preview.Builder().build().also {
+                    val previewBuilder = Preview.Builder()
+
+                    // Inspect live CaptureResult at 1.0x zoom so multi-camera logical devices
+                    // (like Pixel 9 Pro: 0.5x UW + 1x Main + 5x Tele) report the EXACT 1.0x
+                    // physical lens focal length & sensor size instead of focalLengths[0] (UW)!
+                    Camera2Interop.Extender(previewBuilder).setSessionCaptureCallback(
+                        object : CameraCaptureSession.CaptureCallback() {
+                            override fun onCaptureCompleted(
+                                session: CameraCaptureSession,
+                                request: CaptureRequest,
+                                result: TotalCaptureResult
+                            ) {
+                                if (calibrated1xLens.get()) return
+                                val liveZoom = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                    result.get(CaptureResult.CONTROL_ZOOM_RATIO) ?: 1.0f
+                                } else 1.0f
+
+                                // Latch exact physical 1.0x camera intrinsics when at ~1.0x zoom
+                                if (abs(liveZoom - 1.0f) < 0.08f) {
+                                    val liveFocal = result.get(CaptureResult.LENS_FOCAL_LENGTH)
+                                    val activePhysId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                        result.get(CaptureResult.LOGICAL_MULTI_CAMERA_ACTIVE_PHYSICAL_ID)
+                                    } else null
+
+                                    var physW: Float? = null
+                                    var physH: Float? = null
+                                    if (!activePhysId.isNullOrBlank()) {
+                                        runCatching {
+                                            val chars = cameraManager.getCameraCharacteristics(activePhysId)
+                                            val sz = chars.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE)
+                                            if (sz != null) {
+                                                physW = sz.width
+                                                physH = sz.height
+                                            }
+                                        }
+                                    }
+
+                                    if (liveFocal != null && liveFocal > 0.5f) {
+                                        calibrated1xLens.set(true)
+                                        viewModel.updateCameraIntrinsics { cur ->
+                                            cur.copy(
+                                                focalLengthMm = liveFocal,
+                                                sensorWidthMm = physW ?: cur.sensorWidthMm,
+                                                sensorHeightMm = physH ?: cur.sensorHeightMm
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    )
+
+                    val preview = previewBuilder.build().also {
                         it.surfaceProvider = previewView.surfaceProvider
                     }
 
@@ -143,7 +207,9 @@ fun CameraPreviewContainer(
                         )
                         boundCamera = camera
 
-                        // Extract physical Camera2 intrinsics for accurate AR FOV projection
+                        // Initial fallback intrinsics before first CaptureResult arrives:
+                        // Pick the focal length closest to a 24mm-equivalent 1.0x main lens
+                        // (avoids grabbing index 0 ultrawide on multi-camera logical devices).
                         val cam2Info = Camera2CameraInfo.from(camera.cameraInfo)
                         val physicalSize = cam2Info.getCameraCharacteristic(
                             CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE
@@ -155,11 +221,24 @@ fun CameraPreviewContainer(
                             CameraCharacteristics.SENSOR_ORIENTATION
                         ) ?: 90
 
+                        val chosenFocal = if (focalLengths != null && focalLengths.isNotEmpty()) {
+                            if (focalLengths.size == 1 || physicalSize == null) {
+                                focalLengths[0]
+                            } else {
+                                val diagMm = hypot(physicalSize.width.toDouble(), physicalSize.height.toDouble())
+                                // 35mm full-frame diagonal = 43.27mm; main 1.0x smartphone lens is ~24-26mm equiv
+                                focalLengths.minByOrNull { f ->
+                                    val eq35 = f * (43.27 / diagMm.coerceAtLeast(1.0))
+                                    abs(eq35 - 25.0)
+                                } ?: focalLengths[0]
+                            }
+                        } else null
+
                         viewModel.updateCameraIntrinsics { cur ->
                             cur.copy(
                                 sensorWidthMm = physicalSize?.width ?: cur.sensorWidthMm,
                                 sensorHeightMm = physicalSize?.height ?: cur.sensorHeightMm,
-                                focalLengthMm = focalLengths?.firstOrNull() ?: cur.focalLengthMm,
+                                focalLengthMm = chosenFocal ?: cur.focalLengthMm,
                                 sensorOrientationDeg = sensorOrientation
                             )
                         }

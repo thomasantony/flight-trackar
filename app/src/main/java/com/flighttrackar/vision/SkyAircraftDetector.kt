@@ -318,7 +318,7 @@ class SkyAircraftDetector {
         }
 
         val candidates = when (mode) {
-            DetectedSkyMode.DAY -> findDayCandidates(roiY, roiW, roiH, madY, hint.expectedSizeNorm * w)
+            DetectedSkyMode.DAY -> findDayCandidates(roiY, roiW, roiH, medianY, madY, hint.expectedSizeNorm * w)
             DetectedSkyMode.NIGHT -> findNightCandidates(frame, roiY, x0, y0, roiW, roiH, medianY, madY)
             DetectedSkyMode.OBSTRUCTED -> emptyList()
         }
@@ -508,26 +508,31 @@ class SkyAircraftDetector {
     }
 
     /**
-     * Day-mode detector: estimates a smooth local sky background via a coarse 9x9-pixel
-     * neighborhood ring (median/mean of surrounding ring at radius r=6), finds compact dark
-     * silhouettes or bright sunlit fuselage glints above adaptive noise threshold, and extracts
-     * connected blobs.
+     * Day-mode detector: estimates a smooth local sky background via an 8-point surrounding ring,
+     * requires all 8 ring samples to belong to uniform bright sky (rejecting tree branches,
+     * chimneys, and rooflines), extracts compact silhouettes/glints, and verifies 4-side sky
+     * enclosure + downward ground/foliage clearance.
      */
     private fun findDayCandidates(
         roiY: IntArray,
         roiW: Int,
         roiH: Int,
+        medianY: Float,
         madY: Float,
         expectedPx: Float
     ): List<CandidateBlob> {
         val ringR = (expectedPx * 0.6f).toInt().coerceIn(5, 14)
-        val darkThresh = max(14f, madY * 4.2f)
-        val brightThresh = max(20f, madY * 5.2f)
+        val darkThresh = max(16f, madY * 4.5f)
+        val brightThresh = max(22f, madY * 5.5f)
+        // Any ring pixel significantly darker than the sky median indicates ground/foliage/roof clutter
+        val skyFloor = (medianY - max(38f, madY * 5.0f)).coerceAtLeast(55f)
 
         val mask = BooleanArray(roiW * roiH)
         val contrast = FloatArray(roiW * roiH)
 
-        // Compare each pixel against 8-point sky ring at radius ringR (fast O(1) local background!)
+        // Compare each pixel against 8-point sky ring at radius ringR (fast O(1) local background!).
+        // Note: Open-sky enclosure & tree/roof rejection is applied at the whole-blob level
+        // in isSurroundedByOpenSky() so wide aircraft wings never self-reject on the inner ring.
         for (y in ringR until roiH - ringR) {
             val rowOff = y * roiW
             for (x in ringR until roiW - ringR) {
@@ -556,7 +561,7 @@ class SkyAircraftDetector {
         }
 
         val maxArea = ((roiW * roiH) * 0.08f).toInt().coerceIn(80, 900)
-        return extractBlobs(
+        val rawBlobs = extractBlobs(
             roiY = roiY,
             mask = mask,
             contrast = contrast,
@@ -568,6 +573,78 @@ class SkyAircraftDetector {
             x0 = 0,
             y0 = 0
         )
+
+        // Post-filter: ensure each Day blob is genuinely surrounded by open sky on all 4 sides
+        // and not perched immediately above dark tree canopy / roof clutter.
+        return rawBlobs.filter { blob ->
+            isSurroundedByOpenSky(roiY, roiW, roiH, blob, medianY, skyFloor)
+        }
+    }
+
+    /**
+     * Verifies that a Day-mode candidate blob is isolated in open sky on all 4 sides
+     * and does not sit directly above a dark tree canopy, chimney, or roofline.
+     */
+    private fun isSurroundedByOpenSky(
+        roiY: IntArray,
+        roiW: Int,
+        roiH: Int,
+        blob: CandidateBlob,
+        skyMedian: Float,
+        skyFloor: Float
+    ): Boolean {
+        // Reject blobs hugging ROI borders (typical of ground/tree masses intruding from bottom)
+        if (blob.minX <= 3 || blob.minY <= 3 || blob.maxX >= roiW - 4 || blob.maxY >= roiH - 4) {
+            return false
+        }
+        if (blob.meanBorderDiff > 22f) return false
+
+        val pad = 5
+        val bx0 = (blob.minX - pad).coerceAtLeast(0)
+        val by0 = (blob.minY - pad).coerceAtLeast(0)
+        val bx1 = (blob.maxX + pad).coerceAtMost(roiW - 1)
+        val by1 = (blob.maxY + pad).coerceAtMost(roiH - 1)
+
+        // Check all 4 border edges individually: no side may be dark ground/foliage
+        var topSum = 0; var topN = 0
+        var botSum = 0; var botN = 0
+        for (x in bx0..bx1) {
+            topSum += roiY[by0 * roiW + x]; topN++
+            botSum += roiY[by1 * roiW + x]; botN++
+        }
+        var leftSum = 0; var leftN = 0
+        var rightSum = 0; var rightN = 0
+        for (y in by0..by1) {
+            leftSum += roiY[y * roiW + bx0]; leftN++
+            rightSum += roiY[y * roiW + bx1]; rightN++
+        }
+        val sideMinMean = minOf(
+            topSum.toFloat() / max(1, topN),
+            botSum.toFloat() / max(1, botN),
+            leftSum.toFloat() / max(1, leftN),
+            rightSum.toFloat() / max(1, rightN)
+        )
+        if (sideMinMean < skyFloor) return false
+
+        // Downward probe below blob: reject twigs/branches connected to dark canopy just below
+        val probeTop = (blob.maxY + 5).coerceAtMost(roiH - 1)
+        val probeBot = (blob.maxY + 20).coerceAtMost(roiH - 1)
+        if (probeBot > probeTop) {
+            var darkCount = 0
+            var totalCount = 0
+            val darkCut = (skyMedian - 36f).coerceAtLeast(skyFloor)
+            for (y in probeTop..probeBot step 2) {
+                val rowOff = y * roiW
+                for (x in bx0..bx1 step 2) {
+                    if (roiY[rowOff + x] < darkCut) darkCount++
+                    totalCount++
+                }
+            }
+            if (totalCount > 0 && darkCount.toFloat() / totalCount > 0.22f) {
+                return false
+            }
+        }
+        return true
     }
 
     /**

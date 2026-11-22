@@ -1,5 +1,7 @@
 package com.flighttrackar.ui
 
+import android.content.Intent
+import androidx.core.net.toUri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,16 +21,19 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.flighttrackar.BuildConfig
 import com.flighttrackar.model.AdsbProviderChoice
 import com.flighttrackar.model.AppSettings
 import com.flighttrackar.model.UnitSystem
@@ -49,6 +54,7 @@ fun SettingsSheet(
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val context = LocalContext.current
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -150,6 +156,37 @@ fun SettingsSheet(
                 onValueChange = onExtraLeadChange,
                 valueRange = 0f..15f
             )
+
+            Spacer(modifier = Modifier.height(12.dp))
+            HorizontalDivider(color = Color(0x22FFFFFF))
+            Spacer(modifier = Modifier.height(12.dp))
+
+            SectionHeader("About, Privacy & Open Data")
+            Text(
+                text = "FlightTrackAR v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})\n" +
+                    "Camera frames are processed strictly on-device and never recorded or transmitted. " +
+                    "Live flight positions are fetched from open community ADS-B networks (airplanes.live, adsb.lol, OpenSky Network).",
+                fontSize = 11.sp,
+                color = HudColors.TextSecondary,
+                lineHeight = 16.sp
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            TextButton(
+                onClick = {
+                    val intent = Intent(
+                        Intent.ACTION_VIEW,
+                        "https://thomasantony.github.io/flight-trackar/privacy-policy.html".toUri()
+                    )
+                    runCatching { context.startActivity(intent) }
+                }
+            ) {
+                Text(
+                    text = "View Privacy Policy",
+                    color = HudColors.CyanPrimary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
         }
     }
 }

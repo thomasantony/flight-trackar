@@ -8,3 +8,13 @@
 /captures/
 .externalNativeBuild/
 .cxx/
+
+# Release signing secrets (never commit!)
+keystore.properties
+*.jks
+*.keystore
+*.p12
+*.pepk
+
+# Intermediate generated artwork
+store/assets/*_raw.png

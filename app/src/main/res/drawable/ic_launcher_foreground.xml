@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Reticle ring -->
+    <path
+        android:pathData="M54,24 A30,30 0 1,1 53.99,24 Z"
+        android:strokeWidth="2.5"
+        android:strokeColor="#38BDF8"
+        android:fillColor="#00000000" />
+    <!-- Airplane silhouette -->
+    <path
+        android:fillColor="#E0F2FE"
+        android:pathData="M54,32 L58,47 L73,54 L73,58 L58,54 L57,66 L63,70 L63,73 L54,70 L45,73 L45,70 L51,66 L50,54 L35,58 L35,54 L50,47 Z" />
+</vector>
